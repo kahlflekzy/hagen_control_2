@@ -106,30 +106,6 @@ class Controller(Node):
         x, max_ = theta + np.pi, 2*np.pi
         return -np.pi + ((max_ + (x % max_)) % max_)
 
-    def control_commands(self, data: list):
-        """
-        Given a data list of control input which is a list of tuples.
-        [([Input], ControlType, duration)]
-        Input can be a 1 or more values. 1 if the second value can be inferred.
-        Input takes the one of the forms below
-        [v]
-        [w]
-        [v, w]
-        [vr, vl]
-        [wr, wl]
-
-        :param data:
-        :return:
-        """
-        if not self.busy:
-            self.data = data
-            x, y, z = self.initial_pose
-            self.estimated_pose = Vector3(x=x, y=y, z=z)
-            self.start_next_command()
-            self.busy = True
-            return True
-        return False
-
     def estimate_pose(self):
         """
         Store estimated (calculated pose) and reported odometry.

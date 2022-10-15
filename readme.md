@@ -96,5 +96,19 @@ In
 ```
 ros2 pkg create --license BSD-2.0 --description "A package for hagen control" --dependencies rclpy std_msgs sensor_msgs geometry_msgs nav_msgs --build-type ament_python --node-name controller control
 ```
+
+### Plot
+```
+sudo apt install ros-foxy-plotjuggler-ros
+```
+
+```
+. /opt/ros/foxy/setup.bash
+ros2 run plotjuggler plotjuggler
+```
+
+Search for topics, select topic, select data of interest, right click and drag and drop in graph.
+
 ### REFERENCES 
 1. [Time](https://github.com/mikeferguson/ros2_cookbook/blob/main/rclpy/time.md)
+2. [RQTJuggler](https://blog.csdn.net/ZhangRelay/article/details/120598986)

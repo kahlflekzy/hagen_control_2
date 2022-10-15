@@ -52,6 +52,7 @@ class Controller(Node):
         self.odometry_list = []
         self.busy = False
         self.twist_publisher = None
+        self.pose_publisher = None
         self.ref_pose = [0] * 3
         self.kw = 0
         self.kv = 0
@@ -75,6 +76,7 @@ class Controller(Node):
     def create_publishers(self):
         """"""
         self.twist_publisher = self.create_publisher(Twist, '/hagen/cmd_vel', 5)
+        self.pose_publisher = self.create_publisher(Vector3, '/hagen2/pose', 5)
 
     def set_robot_pose(self, msg: nav_msgs.msg.Odometry):
         """
@@ -127,6 +129,12 @@ class Controller(Node):
     @staticmethod
     def wrap_to_pi(theta: float):
         """"""
+        x, max_ = theta + np.pi, 2 * np.pi
+        return -np.pi + ((max_ + (x % max_)) % max_)
+
+    @staticmethod
+    def wrap_to_pi_2(theta: float):
+        """"""
         return DifferentialDrive.wrap_min_max(theta, -np.pi, np.pi)
 
     @staticmethod
@@ -170,10 +178,14 @@ class Controller(Node):
         alpha = self.estimated_pose.z + (0.5 * self.w * self.sample_rate)
         self.estimated_pose.x = self.estimated_pose.x + (self.v * self.sample_rate * np.cos(alpha))
         self.estimated_pose.y = self.estimated_pose.y + (self.v * self.sample_rate * np.sin(alpha))
-        self.estimated_pose.z = self.wrap_to_pi(self.estimated_pose.z + (self.w * self.sample_rate))
-        # self.estimated_pose_publisher.publish(self.estimated_pose)
+        # self.estimated_pose.z = self.wrap_to_pi(self.estimated_pose.z + (self.w * self.sample_rate))
+        self.estimated_pose.z = self.estimated_pose.z + (self.w * self.sample_rate)
         self.pose_estimates.append(np.array([self.estimated_pose.x, self.estimated_pose.y, self.estimated_pose.z]))
         self.odometry_list.append(self.robot_pose)
+        # self.pose_publisher.publish(self.estimated_pose)
+        x, y, z = self.robot_pose
+        msg = Vector3(x=x, y=y, z=z)
+        self.pose_publisher.publish(msg)
 
     def save_odom_to_file(self):
         """
@@ -526,7 +538,7 @@ class DifferentialDrive(Controller):
             self.estimate_pose()
             self.send_velocity(v, w)
 
-    def ref_path_control(self, references: list, kr=0.8, kv=0.4, kw=0.3):
+    def ref_path_control(self, references: list, kr=0.95, kv=0.45, kw=0.55):
         """
         Given references,
         for any line segment
@@ -549,7 +561,7 @@ class DifferentialDrive(Controller):
             self.kv = kv
             self.kw = kw
             self.file_prefix = "ref_path_control_"
-            self.epsilon = 0.6
+            self.epsilon = 0.35
             self.control_timer = self.create_timer(self.sample_rate, self.control_ref_path_callback)
             self.busy = True
             return True
@@ -590,10 +602,11 @@ class DifferentialDrive(Controller):
             _, _, theta = self.robot_pose
             e = theta_ref - theta
             e = self.wrap_to_pi(e)
-            w = self.kw * e
-            v = self.kv * np.cos(e)
+            self.w = self.kw * e
+            self.v = self.kv * np.cos(e)
             self.logger.info(f"point: {self.point_index}; [{ti} - {ti1}]")
-            self.send_velocity(v, w)
+            self.send_velocity(v=self.v, w=self.w)
+            self.estimate_pose()
 
     def ppack_a(self, a: list, b: list, kv=0.45, kw=0.41):
         """"""
@@ -601,7 +614,7 @@ class DifferentialDrive(Controller):
             self.kv = kv
             self.kw = kw
             self.file_prefix = "ref_ppark_a_control_"
-            self.epsilon = 0.3
+            self.epsilon = 0.4
             self.d_tol = 0.1
             centre = (np.array(b) - np.array(a)) / 2
             self.control_timer = self.create_timer(self.sample_rate, lambda: self.ppack_a_callback(centre, b))
@@ -681,8 +694,17 @@ def main():
     # node.ref_pose_intermediate_direction([3, 6, 0])
 
     # reference via paths
-    node.save_odom_data = True
-    node.ref_path_control([(3, 0), (6, 4), (3, 4), (3, 1), (0, 3)])
+    # node.save_odom_data = True
+    import time
+    count = 0
+    max_ = 5
+    while count <= max_:
+        node.pose_publisher.publish(node.estimated_pose)
+        time.sleep(1)
+        count += 1
+    if node.pose_publisher.get_subscription_count():
+        node.ref_path_control([(3, 0), (6, 4), (3, 4), (3, 1), (0, 3)])
+    # node.ref_path_control([(3, 0), (6, 4), (3, 4), (3, 1), (0, 3)])
 
     # ppack
     # node.save_odom_data = True
