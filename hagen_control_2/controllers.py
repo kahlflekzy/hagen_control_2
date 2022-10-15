@@ -601,7 +601,7 @@ class DifferentialDrive(Controller):
             theta_ref = theta_line + theta_rot
             _, _, theta = self.robot_pose
             e = theta_ref - theta
-            e = self.wrap_to_pi(e)
+            # e = self.wrap_to_pi(e)
             self.w = self.kw * e
             self.v = self.kv * np.cos(e)
             self.logger.info(f"point: {self.point_index}; [{ti} - {ti1}]")

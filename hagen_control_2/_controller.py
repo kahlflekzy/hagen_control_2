@@ -27,6 +27,7 @@ class Controller(Node):
         self.odometry_list = []
         self.busy = False
         self.twist_publisher = None
+        self.pose_publisher = None
         self.ref_pose = [0] * 3
         self.kw = 0
         self.kv = 0
@@ -35,6 +36,7 @@ class Controller(Node):
         self.references = []
         self.point_index = 0
         self.kr = 0
+        self.last_index = 0
         super().__init__(node_name)
         self.logger = self.get_logger()
         self.create_subscribers()
@@ -51,6 +53,7 @@ class Controller(Node):
     def create_publishers(self):
         """"""
         self.twist_publisher = self.create_publisher(Twist, '/hagen/cmd_vel', 5)
+        self.pose_publisher = self.create_publisher(Vector3, '/hagen2/pose', 5)
 
     def set_robot_pose(self, msg: nav_msgs.msg.Odometry):
         """
@@ -116,9 +119,12 @@ class Controller(Node):
         self.estimated_pose.x = self.estimated_pose.x + (self.v * self.sample_rate * np.cos(alpha))
         self.estimated_pose.y = self.estimated_pose.y + (self.v * self.sample_rate * np.sin(alpha))
         self.estimated_pose.z = self.wrap_to_pi(self.estimated_pose.z + (self.w * self.sample_rate))
-        # self.estimated_pose_publisher.publish(self.estimated_pose)
         self.pose_estimates.append(np.array([self.estimated_pose.x, self.estimated_pose.y, self.estimated_pose.z]))
         self.odometry_list.append(self.robot_pose)
+        # self.pose_publisher.publish(self.estimated_pose)
+        x, y, z = self.robot_pose
+        msg = Vector3(x=x, y=y, z=z)
+        self.pose_publisher.publish(msg)
 
     def save_odom_to_file(self):
         """
@@ -134,7 +140,7 @@ class Controller(Node):
             self.get_logger().info(f"Pose Estimate Data Size: {np_array.shape}.")
             np.save(f"{self.file_prefix}pose_estimates", np_array)
 
-    def ref_path_control(self, references: list, kr=0.8, kv=0.4, kw=0.3):
+    def ref_path_control(self, references: list, kr=0.95, kv=0.25, kw=0.8):
         """
         Alias reference_path_follower_diff_drive.
 
@@ -151,7 +157,8 @@ class Controller(Node):
             self.kv = kv
             self.kw = kw
             self.file_prefix = "ref_path_control_"
-            self.epsilon = 0.6
+            self.epsilon = 0.11
+            self.last_index = len(self.references) - 2
             self.control_timer = self.create_timer(self.sample_rate, self.control_ref_path_callback)
             self.busy = True
             return True
@@ -176,7 +183,7 @@ class Controller(Node):
             q = np.array([x, y])
             r = (q - ti)
             u = (v@r)/(v@v)
-            if u > 1 and self.point_index + 2 < len(self.references):
+            if u > 0.86 and self.point_index < self.last_index:
                 # follow next line
                 self.point_index += 1
                 ti = references[self.point_index]
@@ -185,19 +192,18 @@ class Controller(Node):
                 r = (q - ti)
             # follow current line v
             vn = np.array([v[1], -v[0]])
-            vn_transpose = vn
-            d = (vn_transpose@r)/(vn_transpose@vn)
+            d = (vn@r)/(vn@vn)
             theta_line = np.arctan2(v[1], v[0])
             theta_rot = np.arctan(self.kr*d)
             theta_ref = theta_line + theta_rot
             _, _, theta = self.robot_pose
             e = theta_ref - theta
             e = self.wrap_to_pi(e)
-            w = self.kw * e
-            v = self.kv * np.cos(e)
+            self.w = self.kw * e
+            self.v = self.kv * np.cos(e)
             self.logger.info(f"point: {self.point_index}; [{ti} - {ti1}]")
             self.estimate_pose()
-            self.send_velocity(v, w)
+            self.send_velocity(v=self.v, w=self.w)
 
 
 def main():
@@ -215,6 +221,14 @@ def main():
 
     # reference via paths
     node.save_odom_data = True
+    import time
+    count = 0
+    max_ = 3
+    while count <= max_:
+        # used to ensure plot juggler is latched
+        node.pose_publisher.publish(node.estimated_pose)
+        time.sleep(1)
+        count += 1
     node.ref_path_control([(3, 0), (6, 4), (3, 4), (3, 1), (0, 3)])
 
     rclpy.spin(node)
