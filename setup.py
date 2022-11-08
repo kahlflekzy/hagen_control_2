@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
             'controller = hagen_control_2.controller:main',
             'controller2 = hagen_control_2.controllers:main',
-            'path_follower = hagen_control_2._controller:main'
+            'path_follower = hagen_control_2._controller:main',
+            'ekf = hagen_control_2.ekf_control:main'
         ],
     },
 )
