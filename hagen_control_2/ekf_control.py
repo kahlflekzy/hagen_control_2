@@ -413,12 +413,10 @@ class EKF:
         """"""
         self.predicted_state = self.forward(self.predicted_state, control)
         self.predict(control)
-        p_state = self.predicted_state.copy()
         for landmark in self.landmarks:
-            z = self.get_measurement(landmark, p_state)
+            z = self.get_measurement(landmark, self.predicted_state)
             self.ekf_update(z, landmark)
-        # return self.x.flatten()
-        return self.predicted_state.flatten()
+        return self.x.flatten()
 
     @staticmethod
     def covariance_ellipse(p, deviations=1):
@@ -450,7 +448,7 @@ class EKF:
 
 def main():
     rclpy.init()
-    dt = 0.02
+    dt = 0.04
     ekf = EKF(dt=dt, std_vel=0.3, std_steer=np.radians(1), range_std=0.3, bearing_std=0.1)
     node = Controller(sample_rate=dt, ekf=ekf)
 
@@ -528,7 +526,6 @@ def check():
 
 
 def analytical():
-    import time
     dt = 0.04
     landmarks = [(5, 30), (5, -30), (-5, 0)]
 
@@ -554,8 +551,8 @@ def analytical():
     count = 0
     while count < 710:
         count += 1
-        states.append(ekf_state)
-        states2.append(ekf.x.flatten())
+        states2.append(ekf_state)
+        states.append(ekf.predicted_state.flatten())
         x, y, theta = ekf_state
         xr, yr = end
         d = np.sqrt(((xr - x) ** 2) + ((yr - y) ** 2))
@@ -578,7 +575,6 @@ def analytical():
                 v = kv * d_i
                 print(f"Approaching intermediate point: {d_i:.4f}")
         ekf_state = ekf.localize(np.array([v, w]))
-        # time.sleep(0.05)
     print(f"finished: {len(states)}")
 
     np_array = np.array(states)
@@ -586,15 +582,15 @@ def analytical():
     y = np_array[:, 1]
     z = np_array[:, 2]
 
-    # plot1(x, y, z, "Estimated Pose")
-    plot2(x, y, "Traversed Trajectory", landmarks=np.array(landmarks))
+    plot1(x, y, z, "Estimated Pose")
+    plot2(x, y, "Estimated Trajectory", landmarks=np.array(landmarks))
 
     np_array = np.array(states2)
     x = np_array[:, 0]
     y = np_array[:, 1]
     z = np_array[:, 2]
 
-    # plot1(x, y, z, "Estimated Pose")
+    plot1(x, y, z, "Actual Pose")
     plot2(x, y, "Traversed Trajectory", landmarks=np.array(landmarks))
 
 
