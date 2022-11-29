@@ -46,14 +46,13 @@ class EKFLocalization:
         self._x, self._y, self._theta, self._vt, self._wt, self._dt = x, y, theta, vt, wt, dt
         self.state = sympy.Matrix([x, y, theta])
         self.control = sympy.Matrix([vt, wt])
-        # Task calculate the jacobin with respect to self.state
+        # Task calculate the jacobian with respect to self.state
         f_j = f.jacobian(self.state)
-        # Task calculate the jacobin with respect to self.control
+        # Task calculate the jacobian with respect to self.control
         v_j = f.jacobian(self.control)
         self.f = lambdify((x, y, theta, vt, wt, dt), f, "numpy")
         self.F_j = lambdify((x, y, theta, vt, wt, dt), f_j, "numpy")
         self.V_j = lambdify((x, y, theta, vt, wt, dt), v_j, "numpy")
-        return
 
     def x_forward(self, x, u, _dt):
         """
@@ -208,13 +207,12 @@ class EKF2(EKFLocalization):
 
     def ekf_update(self, z, _landmarks):
         # T1: Get linearized sensor measurements
-        hx_total = np.empty((self.dim_z, self.sensor_type))
-        h_total = np.empty((self.dim_z, 1))
+        hx_total = np.empty((self.dim_z, 1))
+        h_total = np.empty((self.dim_z, self.dim_x))
         for ind, landmark in enumerate(landmarks):
             hx, h = self.get_linearized_measurement_model(self.x, landmark)
             hx_total[ind * self.sensor_type:(ind + 1) * self.sensor_type, 0:self.dim_x] = hx
-            h_total[ind * self.sensor_type:(ind + 1) * self.sensor_type, 0:1] = h
-
+            h_total[ind * self.sensor_type:(ind + 1) * self.sensor_type, :] = h
         h = h_total
         hx = hx_total
 
@@ -222,10 +220,10 @@ class EKF2(EKFLocalization):
         # T2: Define the kalman gain
         self.K = pht @ np.linalg.inv(h @ pht + self.R)
         # T3: calculate the residual of sensor reading
-        y = np.empty(self.dim_z)
+        y = np.empty((self.dim_z, 1))
         for i in range(0, self.dim_z, self.sensor_type):
             _z = z[i:i + self.sensor_type]
-            _hx = z[i:i + self.sensor_type]
+            _hx = hx[i:i + self.sensor_type]
             y[i:i + self.sensor_type] = self.residual(_z, _hx)
         self.y = y
         self.x = self.x + np.dot(self.K, self.y)
@@ -239,7 +237,11 @@ class EKF2(EKFLocalization):
                          iteration_num=5):
         self.x = array([[2, 6, .3]]).T  # x, y, steer angle
         self.P = np.diag([.1, .1, .1])
-        self.R = np.diag([std_range ** 2, std_bearing ** 2])
+        cov_range = std_range ** 2
+        cov_bearing = std_bearing ** 2
+        for i in range(0, self.dim_z, 2):
+            self.R[i:i] = cov_range
+            self.R[i+1:i+1] = cov_bearing
         sim_pos = self.x.copy()
         u = array([1.1, .01])
         plt.figure()
@@ -254,7 +256,7 @@ class EKF2(EKFLocalization):
                     self.plot_covariance_ellipse((self.x[0, 0], self.x[1, 0]), self.P[0:2, 0:2], std=6, facecolor='k',
                                                  alpha=0.3)
 
-                z_total = np.empty(self.dim_z)
+                z_total = np.empty((self.dim_z, 1))
                 for _id, landmark in enumerate(land_marks):
                     z = self.z_landmark(landmark, sim_pos, std_range, std_bearing)
                     z_total[_id * self.sensor_type:(_id + 1) * self.sensor_type] = z
@@ -275,5 +277,6 @@ class EKF2(EKFLocalization):
 
 _dt = 0.1
 landmarks = array([[50, 100], [40, 90], [150, 150], [-150, 200]])
-ekf = EKFLocalization(_dt, std_vel=5.1, std_steer=np.radians(1))
+# ekf = EKFLocalization(_dt, std_vel=5.1, std_steer=np.radians(1))
+ekf = EKF2(_dt, std_vel=5.1, std_steer=np.radians(1))
 ekf.run_localization(landmarks, std_range=0.3, std_bearing=0.1, ellipse_step=2000, iteration_num=20000)

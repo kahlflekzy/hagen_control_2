@@ -109,6 +109,44 @@ ros2 run plotjuggler plotjuggler
 
 Search for topics, select topic, select data of interest, right click and drag and drop in graph.
 
+## Particle Filter
+### Steps
+1. Initialize a set of `n` particles.
+   - if no prior information is known about the location of the robot, generate particles uniformly. 
+   ```
+   px = U(xmin, xmax, n)
+   py = U(ymin, ymax, n)
+   ptheta = U(theta_min, theta_max, n)
+   ```
+   - if there is an initial belief about robot location `x0 = N(mean, std)`, generate particles with gaussian distribution
+   ```
+   px = mean_x + random(n)*std_x
+   py = mean_y + random(n)*std_y
+   ptheta = mean_theta + random(n)*std_theta
+   ```
+2. Initialize `n` weights to zero.
+   ```
+   weights = zeros(n)
+   ```
+3. Prediction: Apply control inputs on the particles (using motion model) to obtain predicted particles.
+4. Correction:
+   * Initialize weights to ones. `weights = zeros(n)`
+   * Estimate measurement for each particle.
+   ```
+   given n particles, m landmarks (specified as x, y pairs) and robot state (x,y) and sensor error R
+   calculate distance between robot and landmarks to generate some measurement
+   z = empty(m)
+   for i, landmark in enumerate(landmarks):
+      # z[i] = norm(landmark - state)
+      xi, yi = landmark
+      x, y = state
+      d = sqrt((yi - y)^2 + (xi - x)^2)
+      z[i] = d + random()*R # latter just adds some noise to measurement
+   calculate distance between particles and landmarks
+   and use it to generate the weights or importance factors
+   
+   ```
+
 ### REFERENCES 
 1. [Time](https://github.com/mikeferguson/ros2_cookbook/blob/main/rclpy/time.md)
 2. [RQTJuggler](https://blog.csdn.net/ZhangRelay/article/details/120598986)
